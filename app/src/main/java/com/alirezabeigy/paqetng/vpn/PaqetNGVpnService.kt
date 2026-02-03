@@ -18,6 +18,12 @@ import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.alirezabeigy.paqetng.MainActivity
 import com.alirezabeigy.paqetng.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -25,6 +31,8 @@ import java.io.File
  * Flow: device apps -> tun -> tun2socks (hev-socks5-tunnel) -> 127.0.0.1:socksPort -> paqet.
  */
 class PaqetNGVpnService : VpnService() {
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private var tun2Socks: Tun2SocksRunner? = null
@@ -69,32 +77,46 @@ class PaqetNGVpnService : VpnService() {
             return START_NOT_STICKY
         }
         val socksPort = intent?.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_PORT) ?: DEFAULT_PORT
-        if (vpnInterface != null) {
-            stopTun2Socks()
-            vpnInterface?.close()
-        }
         val prepare = prepare(this)
         if (prepare != null) {
             Log.e(TAG, "VPN preparation failed - user must grant VPN permission")
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!establishVpn(socksPort)) {
-            stopSelf()
-            return START_NOT_STICKY
+        // Must call startForeground within ~5s to avoid ANR; do it immediately with "Connecting..."
+        startForeground(NOTIFICATION_ID, buildNotification(connecting = true))
+        serviceScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                if (vpnInterface != null) {
+                    stopTun2Socks()
+                    vpnInterface?.close()
+                    vpnInterface = null
+                }
+                establishVpn(socksPort)
+            }
+            if (!success) {
+                Log.e(TAG, "Failed to establish VPN - stopping service")
+                stopSelf()
+                return@launch
+            }
+            withContext(Dispatchers.IO) {
+                startTun2Socks(socksPort)
+            }
+            // Update notification to "VPN connected"
+            startForeground(NOTIFICATION_ID, buildNotification(connecting = false))
         }
-        startForeground(NOTIFICATION_ID, buildNotification())
-        startTun2Socks(socksPort)
         return START_STICKY
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         tearDown()
         super.onDestroy()
     }
 
     /** Tears down VPN (tun, tun2socks, foreground) so the OS drops the VPN. */
     private fun tearDown() {
+        sendBroadcast(Intent(ACTION_VPN_STOPPED).setPackage(packageName))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             if (Build.VERSION.SDK_INT >= 31) {
                 stopForeground(Service.STOP_FOREGROUND_REMOVE)
@@ -182,18 +204,25 @@ class PaqetNGVpnService : VpnService() {
         }
     }
 
-    private fun buildNotification(): Notification {
-        val pending = PendingIntent.getActivity(
+    private fun buildNotification(connecting: Boolean = false): Notification {
+        val contentPending = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val stopPending = PendingIntent.getService(
+            this,
+            0,
+            Intent(this, PaqetNGVpnService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText("VPN connected")
+            .setContentText(if (connecting) "Connecting…" else "VPN connected")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setContentIntent(pending)
+            .setContentIntent(contentPending)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.notification_action_disconnect), stopPending)
             .setOngoing(true)
             .build()
     }
@@ -201,6 +230,8 @@ class PaqetNGVpnService : VpnService() {
     companion object {
         private const val TAG = "PaqetNGVpn"
         const val ACTION_STOP = "com.alirezabeigy.paqetng.vpn.STOP"
+        /** Broadcast sent when VPN is torn down so the app can sync connection state (e.g. stop paqet). */
+        const val ACTION_VPN_STOPPED = "com.alirezabeigy.paqetng.vpn.STOPPED"
         const val EXTRA_SOCKS_PORT = "socks_port"
         private const val DEFAULT_PORT = 1284
         private const val NOTIFICATION_ID = 1

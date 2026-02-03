@@ -8,12 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +39,8 @@ import com.alirezabeigy.paqetng.data.AppLogBuffer
 fun LogViewerScreen(
     logBuffer: AppLogBuffer,
     onBack: () -> Unit,
+    isVpnConnected: Boolean = false,
+    onPacketDumpClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val lines by logBuffer.lines.collectAsState(initial = emptyList())
@@ -59,6 +62,18 @@ fun LogViewerScreen(
                     }
                 },
                 actions = {
+                    if (isVpnConnected) {
+                        IconButton(
+                            onClick = onPacketDumpClick
+                        ) {
+                            Icon(Icons.Default.Speed, contentDescription = "Packet dump")
+                    }
+                    }
+                    IconButton(
+                        onClick = { logBuffer.clear() }
+                    ) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear logs")
+                    }
                     IconButton(
                         onClick = {
                             val text = logBuffer.getFullText()

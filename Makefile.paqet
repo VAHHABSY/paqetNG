@@ -1,0 +1,156 @@
+# paqetNG: Build paqet (from paqet submodule) for Android.
+# Run from paqetNG repo root. Requires: ANDROID_NDK_HOME, Go with CGO, flex, bison, autoconf, automake, libtool.
+
+.PHONY: android android-arm64 android-arm android-x86 android-x86_64 tcpdump tcpdump-windows tcpdump-arm64 tcpdump-arm tcpdump-x86 tcpdump-x86_64 help
+
+# Use abspath so CGO_CFLAGS/CGO_LDFLAGS work when go build runs from paqet/ subdir (e.g. in CI)
+PAQETNG_ROOT := $(abspath $(CURDIR))
+PAQET_SRC := $(PAQETNG_ROOT)/paqet
+BUILD_DIR := $(PAQETNG_ROOT)/build/android
+LIBPCAP_ARM64 := $(BUILD_DIR)/libpcap/arm64-v8a
+LIBPCAP_ARM   := $(BUILD_DIR)/libpcap/armeabi-v7a
+LIBPCAP_X86   := $(BUILD_DIR)/libpcap/x86
+LIBPCAP_X64   := $(BUILD_DIR)/libpcap/x86_64
+
+ANDROID_NDK ?= $(firstword $(ANDROID_NDK_HOME) $(ANDROID_NDK_ROOT))
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_S),Linux)
+  NDK_HOST := linux-x86_64
+  NDK_EXE :=
+else ifeq ($(UNAME_S),Darwin)
+  ifeq ($(UNAME_M),arm64)
+    NDK_HOST := darwin-arm64
+  else
+    NDK_HOST := darwin-x86_64
+  endif
+  NDK_EXE :=
+else ifneq (,$(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)))
+  NDK_HOST := windows-x86_64
+  NDK_EXE := .exe
+else
+  NDK_HOST := linux-x86_64
+  NDK_EXE :=
+endif
+
+NDK_BIN := $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(NDK_HOST)/bin
+ANDROID_API ?= 21
+
+VERSION ?= $(shell (cd $(PAQET_SRC) && git describe --tags --exact-match 2>/dev/null) || (cd $(PAQET_SRC) && git rev-parse --short HEAD 2>/dev/null) || echo "dev")
+GIT_COMMIT ?= $(shell (cd $(PAQET_SRC) && git rev-parse HEAD 2>/dev/null) || echo "unknown")
+GIT_TAG ?= $(shell (cd $(PAQET_SRC) && git describe --tags --exact-match 2>/dev/null) || echo "unknown")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+TCPDUMP_ARM64 := $(BUILD_DIR)/tcpdump/arm64-v8a/tcpdump
+TCPDUMP_ARM   := $(BUILD_DIR)/tcpdump/armeabi-v7a/tcpdump
+TCPDUMP_X86   := $(BUILD_DIR)/tcpdump/x86/tcpdump
+TCPDUMP_X64   := $(BUILD_DIR)/tcpdump/x86_64/tcpdump
+
+help:
+	@echo "Build paqet for Android (from paqet submodule):"
+	@echo "  make -f Makefile.paqet android          - Build for arm64, arm, x86, x86_64"
+	@echo "  make -f Makefile.paqet android-arm64   - Build for arm64-v8a"
+	@echo "  make -f Makefile.paqet android-arm     - Build for armeabi-v7a"
+	@echo "  make -f Makefile.paqet android-x86     - Build for x86"
+	@echo "  make -f Makefile.paqet android-x86_64  - Build for x86_64"
+	@echo "Build tcpdump for Android (requires libpcap):"
+	@echo "  make -f Makefile.paqet tcpdump         - Build tcpdump for all ABIs"
+	@echo "  make -f Makefile.paqet tcpdump-arm64  - Build tcpdump for arm64-v8a"
+	@echo "  make -f Makefile.paqet tcpdump-arm    - Build tcpdump for armeabi-v7a"
+	@echo "  make -f Makefile.paqet tcpdump-x86    - Build tcpdump for x86"
+	@echo "  make -f Makefile.paqet tcpdump-x86_64 - Build tcpdump for x86_64"
+
+android: android-arm64 android-arm android-x86 android-x86_64
+
+android-arm64: $(LIBPCAP_ARM64)/lib/libpcap.a
+	@mkdir -p $(BUILD_DIR)
+	@echo "Building paqet for android/arm64..."
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	cd $(PAQET_SRC) && GOOS=android GOARCH=arm64 CGO_ENABLED=1 \
+	CC="$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang$(NDK_EXE)" \
+	CGO_CFLAGS="-I$(abspath $(LIBPCAP_ARM64)/include)" \
+	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_ARM64)/lib) -lpcap" \
+	go build -trimpath \
+		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-o $(BUILD_DIR)/paqet_android_arm64 ./cmd/main.go
+	@echo "Built: $(BUILD_DIR)/paqet_android_arm64"
+
+android-arm: $(LIBPCAP_ARM)/lib/libpcap.a
+	@mkdir -p $(BUILD_DIR)
+	@echo "Building paqet for android/arm..."
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	cd $(PAQET_SRC) && GOOS=android GOARCH=arm GOARM=7 CGO_ENABLED=1 \
+	CC="$(NDK_BIN)/armv7a-linux-androideabi$(ANDROID_API)-clang$(NDK_EXE)" \
+	CGO_CFLAGS="-I$(abspath $(LIBPCAP_ARM)/include) -mfloat-abi=softfp -marm" \
+	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_ARM)/lib) -lpcap -mfloat-abi=softfp -marm" \
+	go build -trimpath \
+		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-o $(BUILD_DIR)/paqet_android_arm ./cmd/main.go
+	@echo "Built: $(BUILD_DIR)/paqet_android_arm"
+
+$(LIBPCAP_ARM64)/lib/libpcap.a:
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-libpcap-android.sh" arm64-v8a
+
+$(LIBPCAP_ARM)/lib/libpcap.a:
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-libpcap-android.sh" armeabi-v7a
+
+$(LIBPCAP_X86)/lib/libpcap.a:
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-libpcap-android.sh" x86
+
+$(LIBPCAP_X64)/lib/libpcap.a:
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-libpcap-android.sh" x86_64
+
+android-x86: $(LIBPCAP_X86)/lib/libpcap.a
+	@mkdir -p $(BUILD_DIR)
+	@echo "Building paqet for android/386 (x86)..."
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	cd $(PAQET_SRC) && GOOS=android GOARCH=386 CGO_ENABLED=1 \
+	CC="$(NDK_BIN)/i686-linux-android$(ANDROID_API)-clang$(NDK_EXE)" \
+	CGO_CFLAGS="-I$(abspath $(LIBPCAP_X86)/include)" \
+	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_X86)/lib) -lpcap" \
+	go build -trimpath \
+		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-o $(BUILD_DIR)/paqet_android_x86 ./cmd/main.go
+	@echo "Built: $(BUILD_DIR)/paqet_android_x86"
+
+android-x86_64: $(LIBPCAP_X64)/lib/libpcap.a
+	@mkdir -p $(BUILD_DIR)
+	@echo "Building paqet for android/amd64 (x86_64)..."
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	cd $(PAQET_SRC) && GOOS=android GOARCH=amd64 CGO_ENABLED=1 \
+	CC="$(NDK_BIN)/x86_64-linux-android$(ANDROID_API)-clang$(NDK_EXE)" \
+	CGO_CFLAGS="-I$(abspath $(LIBPCAP_X64)/include)" \
+	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_X64)/lib) -lpcap" \
+	go build -trimpath \
+		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-o $(BUILD_DIR)/paqet_android_x86_64 ./cmd/main.go
+	@echo "Built: $(BUILD_DIR)/paqet_android_x86_64"
+
+tcpdump: tcpdump-arm64 tcpdump-arm tcpdump-x86 tcpdump-x86_64
+
+# On Windows, building libpcap for x86/x86_64 often fails (flex/lex). Build only ARM so assemble can succeed.
+tcpdump-windows: tcpdump-arm64 tcpdump-arm
+
+tcpdump-arm64: $(LIBPCAP_ARM64)/lib/libpcap.a
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-tcpdump-android.sh" arm64-v8a
+	@echo "Built: $(TCPDUMP_ARM64)"
+
+tcpdump-arm: $(LIBPCAP_ARM)/lib/libpcap.a
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-tcpdump-android.sh" armeabi-v7a
+	@echo "Built: $(TCPDUMP_ARM)"
+
+tcpdump-x86: $(LIBPCAP_X86)/lib/libpcap.a
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-tcpdump-android.sh" x86
+	@echo "Built: $(TCPDUMP_X86)"
+
+tcpdump-x86_64: $(LIBPCAP_X64)/lib/libpcap.a
+	$(if $(ANDROID_NDK),,$(error ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set))
+	ANDROID_NDK_HOME="$(ANDROID_NDK)" bash "$(PAQETNG_ROOT)/scripts/build-tcpdump-android.sh" x86_64
+	@echo "Built: $(TCPDUMP_X64)"

@@ -9,9 +9,13 @@ val abis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
 fun hasHevtunLib(): Boolean = abis.any { File(jniLibsDir, "$it/$hevtunLib").exists() }
 
 val assetsDir = file("src/main/assets")
-val paqetAbis = listOf("arm64-v8a", "armeabi-v7a")
+// All ABIs (arm + x86 for emulators); assets are stripped per-ABI when building split APKs
+val paqetAbis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
 fun hasPaqetBinaries(): Boolean =
     paqetAbis.any { File(assetsDir, "$it/paqet").exists() } || File(assetsDir, "paqet").exists()
+
+fun hasTcpdumpBinaries(): Boolean =
+    paqetAbis.any { File(assetsDir, "$it/tcpdump").exists() } || File(assetsDir, "tcpdump").exists()
 
 val rootDir = rootProject.projectDir
 val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
@@ -95,6 +99,34 @@ val buildHevtun by tasks.register<Exec>("buildHevtun") {
     }
 }
 
+// Build tcpdump for Android (packet dump screen uses it when VPN is connected).
+// On Windows: requires Git for Windows (make in usr/bin) and NDK; uses prebuilt libpcap via setup-libpcap-windows.ps1.
+val buildTcpdump by tasks.register<Exec>("buildTcpdump") {
+    onlyIf { !hasTcpdumpBinaries() }
+    workingDir = rootDir
+    commandLine("bash", rootDir.resolve("compile-tcpdump.sh").absolutePath)
+    isIgnoreExitValue = false
+    doFirst {
+        val ndk = findNdkPath()
+        if (ndk == null || !ndk.isDirectory) {
+            throw GradleException("Android NDK not found. Set ANDROID_NDK_HOME or ndk.dir in local.properties to build tcpdump.")
+        }
+        environment("ANDROID_NDK_HOME", ndk.absolutePath)
+        // On Windows, prepend Git for Windows usr/bin so make is found when bash runs the script
+        if (isWindows) {
+            val candidates = listOfNotNull(
+                System.getenv("ProgramFiles")?.let { "$it\\Git\\usr\\bin" },
+                System.getenv("ProgramFiles(X86)")?.let { "$it\\Git\\usr\\bin" }
+            )
+            val gitUsrBin = candidates.firstOrNull { path -> file(path).exists() }
+            if (gitUsrBin != null) {
+                val currentPath = System.getenv("PATH") ?: ""
+                environment("PATH", "$gitUsrBin;$currentPath")
+            }
+        }
+    }
+}
+
 // Build paqet (Go) for Android. Fails the build if binaries are missing (no skip).
 val buildPaqet by tasks.register<Exec>("buildPaqet") {
     onlyIf { !hasPaqetBinaries() }
@@ -120,6 +152,33 @@ tasks.whenTaskAdded {
     }
     if (name == "mergeDebugAssets" || name == "mergeReleaseAssets") {
         dependsOn(buildPaqet)
+        dependsOn(buildTcpdump)
+    }
+}
+
+// ABI-aware asset stripping: when building split APKs, strip other-ABI asset folders so each APK
+// only contains that ABI's paqet/tcpdump. Hook into merge*Assets tasks by name (AGP 9 compatible).
+val assetAbiDirs = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+tasks.whenTaskAdded {
+    val taskName = name
+    if (!taskName.startsWith("merge") || !taskName.endsWith("Assets")) return@whenTaskAdded
+    // Universal merge tasks (no ABI in name) are not stripped
+    val singleAbi = when {
+        taskName.contains("Arm64") || taskName.contains("arm64") -> "arm64-v8a"
+        taskName.contains("Armeabi") || taskName.contains("armeabi") -> "armeabi-v7a"
+        (taskName.contains("X86_64") || taskName.contains("x86_64")) -> "x86_64"
+        taskName.contains("X86") || taskName.contains("x86") -> "x86"
+        else -> null
+    }
+    if (singleAbi != null) {
+        doLast {
+            outputs.files.filter { it.isDirectory }.forEach { outDir ->
+                assetAbiDirs.filter { it != singleAbi }.forEach { other ->
+                    val f = file(outDir).resolve(other)
+                    if (f.exists()) f.deleteRecursively()
+                }
+            }
+        }
     }
 }
 

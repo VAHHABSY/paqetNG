@@ -3,7 +3,10 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/hev-socks5-tunnel" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/hev-socks5-tunnel/src/core" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/hev-socks5-tunnel/third-part/hev-task-system" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/hev-socks5-tunnel/third-part/lwip" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/hev-socks5-tunnel/third-part/yaml" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/paqet" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/paqet/build/android/libpcap-android" vcs="Git" />
   </component>
 </project>

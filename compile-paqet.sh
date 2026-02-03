@@ -1,7 +1,7 @@
 #!/bin/bash
-# Build paqet for Android. On Windows uses paqet's build-android-pc.ps1 (prebuilt libpcap, no make).
-# On Linux/macOS uses paqet Makefile (make android). Requires: Go, NDK (ANDROID_NDK_HOME), paqet submodule.
-# Output: app/src/main/assets/arm64-v8a/paqet [, armeabi-v7a/paqet on Unix]
+# Build paqet for Android. On Windows uses scripts/build-android-pc.ps1 (prebuilt libpcap).
+# On Linux/macOS uses Makefile. Requires: Go, NDK (ANDROID_NDK_HOME), paqet submodule.
+# Output: app/src/main/assets/{arm64-v8a,armeabi-v7a,x86,x86_64}/paqet
 set -o errexit
 set -o pipefail
 set -o nounset
@@ -24,20 +24,22 @@ fi
 
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT}}"
 ASSETS="$__dir/app/src/main/assets"
-mkdir -p "$ASSETS/arm64-v8a" "$ASSETS/armeabi-v7a"
+BUILD_OUT="$__dir/build/android"
+mkdir -p "$ASSETS/arm64-v8a" "$ASSETS/armeabi-v7a" "$ASSETS/x86" "$ASSETS/x86_64"
 
-# Windows: use paqet's PowerShell script (prebuilt libpcap, no make/flex/bison)
+# Windows: use our PowerShell script (prebuilt libpcap)
 if [[ "$(uname -s)" =~ MINGW|MSYS|CYGWIN ]]; then
-  echo "Using paqet scripts/build-android-pc.ps1 (Windows)..."
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$__dir/paqet/scripts/build-android-pc.ps1" -NdkPath "$ANDROID_NDK_HOME"
-  cp -f "$__dir/paqet/build/android/paqet_android_arm64" "$ASSETS/arm64-v8a/paqet"
+  echo "Using scripts/build-android-pc.ps1 (Windows)..."
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$__dir/scripts/build-android-pc.ps1" -NdkPath "$ANDROID_NDK_HOME"
+  cp -f "$BUILD_OUT/paqet_android_arm64" "$ASSETS/arm64-v8a/paqet"
   echo "Done. paqet binary copied to $ASSETS/arm64-v8a/paqet (arm64 only on Windows)"
   exit 0
 fi
 
-# Linux/macOS: use Makefile (make android)
-cd "$__dir/paqet"
-make android
-cp -f build/android/paqet_android_arm64 "$ASSETS/arm64-v8a/paqet"
-cp -f build/android/paqet_android_arm   "$ASSETS/armeabi-v7a/paqet"
-echo "Done. paqet binaries copied to $ASSETS/{arm64-v8a,armeabi-v7a}/paqet"
+# Linux/macOS: use Makefile.paqet (builds from paqet submodule)
+make -f "$__dir/Makefile.paqet" android
+cp -f "$BUILD_OUT/paqet_android_arm64"  "$ASSETS/arm64-v8a/paqet"
+cp -f "$BUILD_OUT/paqet_android_arm"   "$ASSETS/armeabi-v7a/paqet"
+cp -f "$BUILD_OUT/paqet_android_x86"   "$ASSETS/x86/paqet"
+cp -f "$BUILD_OUT/paqet_android_x86_64" "$ASSETS/x86_64/paqet"
+echo "Done. paqet binaries copied to $ASSETS/{arm64-v8a,armeabi-v7a,x86,x86_64}/paqet"

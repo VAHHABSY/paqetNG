@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,15 +27,18 @@ import com.alirezabeigy.paqetng.paqet.PaqetRunner
 import com.alirezabeigy.paqetng.ui.HomeScreen
 import com.alirezabeigy.paqetng.ui.HomeViewModel
 import com.alirezabeigy.paqetng.ui.LogViewerScreen
+import com.alirezabeigy.paqetng.ui.PacketDetailActivity
+import com.alirezabeigy.paqetng.ui.PacketDumpScreen
 import com.alirezabeigy.paqetng.ui.SettingsScreen
 import com.alirezabeigy.paqetng.ui.theme.PaqetNGTheme
 import com.alirezabeigy.paqetng.vpn.PaqetNGVpnService
 
 class MainActivity : ComponentActivity() {
 
-    private val logBuffer by lazy { AppLogBuffer() }
+    private val app by lazy { application as PaqetNGApplication }
+    private val logBuffer get() = app.logBuffer
+    private val paqetRunner get() = app.paqetRunner
     private val configRepository by lazy { ConfigRepository(applicationContext) }
-    private val paqetRunner by lazy { PaqetRunner(applicationContext, logBuffer) }
     private val defaultNetworkInfoProvider by lazy { com.alirezabeigy.paqetng.data.DefaultNetworkInfoProvider(applicationContext) }
     private val settingsRepository by lazy { SettingsRepository(applicationContext) }
 
@@ -77,14 +81,54 @@ class MainActivity : ComponentActivity() {
             }
             var showSettings by remember { mutableStateOf(false) }
             var showLogViewer by remember { mutableStateOf(false) }
+            var showPacketDump by remember { mutableStateOf(false) }
+            val isRunning by viewModel.isRunning.collectAsState(initial = false)
             val connectionMode by settingsRepository.connectionMode.collectAsState(initial = SettingsRepository.DEFAULT_CONNECTION_MODE)
+            val configs by viewModel.configs.collectAsState(initial = emptyList())
+            val selectedConfigId by viewModel.selectedConfigId.collectAsState()
+            val connectedConfigId by viewModel.connectedConfigId.collectAsState()
+            val latencyMs by viewModel.latencyMs.collectAsState()
+            val latencyTesting by viewModel.latencyTesting.collectAsState(initial = false)
+            val selectedConfig: PaqetConfig? = remember(configs, selectedConfigId) {
+                configs.find { it.id == selectedConfigId } ?: configs.firstOrNull()
+            }
+            // When user changes the selected profile while connected, restart paqet (and VPN) with the new profile
+            LaunchedEffect(selectedConfigId, isRunning, connectedConfigId) {
+                val newConfig = selectedConfigId?.let { id -> configs.find { it.id == id } }
+                if (isRunning && newConfig != null && selectedConfigId != connectedConfigId) {
+                    handleDisconnect()
+                    handleConnect(newConfig, connectionMode)
+                }
+            }
             PaqetNGTheme(darkTheme = darkTheme) {
                 when {
+                    showPacketDump -> {
+                        BackHandler { showPacketDump = false }
+                        PacketDumpScreen(
+                            tcpdumpBuffer = app.tcpdumpBuffer,
+                            tcpdumpRunner = app.tcpdumpRunner,
+                            isPaqetRunning = isRunning,
+                            connectionMode = connectionMode,
+                            connectedConfig = selectedConfig,
+                            latencyMs = latencyMs,
+                            latencyTesting = latencyTesting,
+                            onTestConnection = { viewModel.testLatency(selectedConfig) },
+                            onBack = { showPacketDump = false },
+                            onOpenPacketDetail = { packetText ->
+                                startActivity(
+                                    Intent(this, PacketDetailActivity::class.java)
+                                        .putExtra(PacketDetailActivity.EXTRA_PACKET_TEXT, packetText)
+                                )
+                            }
+                        )
+                    }
                     showLogViewer -> {
                         BackHandler { showLogViewer = false }
                         LogViewerScreen(
                             logBuffer = logBuffer,
-                            onBack = { showLogViewer = false }
+                            onBack = { showLogViewer = false },
+                            isVpnConnected = isRunning,
+                            onPacketDumpClick = { showPacketDump = true }
                         )
                     }
                     showSettings -> {
@@ -110,6 +154,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleConnect(config: PaqetConfig?, connectionMode: String) {
         if (config == null) return
+        logBuffer.clear()
         if (connectionMode == "socks") {
             // SOCKS-only mode: start paqet only, no VPN
             logBuffer.append(AppLogBuffer.TAG_VPN, "Starting paqet (SOCKS-only mode); VPN will not start.")

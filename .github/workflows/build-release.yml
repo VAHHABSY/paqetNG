@@ -82,6 +82,15 @@ jobs:
           name: app-release
           path: app/build/outputs/apk/release/
 
+      - name: Upload paqet binaries artifact (tag only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: paqet-release
+          path: |
+            build/android/paqet_android_arm64
+            build/android/paqet_android_arm
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
@@ -89,32 +98,60 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Extract changelog for tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          awk -v tag="$TAG" '
+            $0 ~ "^## \\[" tag "\\]" { found=1; print; next }
+            found && $0 ~ /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+
       - name: Download release APK artifact
         uses: actions/download-artifact@v4
         with:
           name: app-release
+          path: apks
 
-      - name: List APKs for release
-        id: apks
+      - name: Download paqet binaries artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: paqet-release
+          path: paqet-binaries
+
+      - name: List release files (APKs + paqet binaries)
+        id: release_files
         run: |
-          # Downloaded artifact = contents of app/build/outputs/apk/release/
+          # APKs from app-release
           shopt -s nullglob
-          apks=(*.apk)
+          apks=(apks/*.apk)
           if [ ${#apks[@]} -eq 0 ]; then
-            echo "::error::No APK found in downloaded artifact"
-            ls -la
+            echo "::error::No APK found in app-release artifact"
+            ls -la apks
             exit 1
           fi
-          echo "APKs to attach:"
-          printf '%s\n' "${apks[@]}" | sort
+          # paqet binaries
+          paqet_arm64="paqet-binaries/paqet_android_arm64"
+          paqet_arm="paqet-binaries/paqet_android_arm"
+          all_files=("${apks[@]}")
+          [ -f "$paqet_arm64" ] && all_files+=("$paqet_arm64")
+          [ -f "$paqet_arm" ] && all_files+=("$paqet_arm")
+          echo "Files to attach:"
+          printf '%s\n' "${all_files[@]}" | sort
           echo "files<<EOF" >> $GITHUB_OUTPUT
-          printf '%s\n' "${apks[@]}" | sort >> $GITHUB_OUTPUT
+          printf '%s\n' "${all_files[@]}" | sort >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.apks.outputs.files }}
-          generate_release_notes: true
+          body_path: release_notes.md
+          files: ${{ steps.release_files.outputs.files }}
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

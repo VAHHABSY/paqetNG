@@ -43,6 +43,9 @@ class Tun2SocksRunner(
         hevService = null
     }
 
+    /** Returns [tx_packets, tx_bytes, rx_packets, rx_bytes] from the native tunnel, or null if not running. */
+    fun getStats(): LongArray? = hevService?.getStats()
+
     private fun buildHevConfig(): String {
         val mtu = 1500
         val ipv4Client = "10.0.0.2"

@@ -45,6 +45,10 @@ class HomeViewModel(
     private val _selectedConfigId = MutableStateFlow<String?>(null)
     val selectedConfigId: StateFlow<String?> = _selectedConfigId.asStateFlow()
 
+    /** Config id we are currently connected with (null when disconnected). Used to restart paqet when user changes profile while connected. */
+    private val _connectedConfigId = MutableStateFlow<String?>(null)
+    val connectedConfigId: StateFlow<String?> = _connectedConfigId.asStateFlow()
+
     private val _editorConfig = MutableStateFlow<PaqetConfig?>(null)
     val editorConfig: StateFlow<PaqetConfig?> = _editorConfig.asStateFlow()
 
@@ -174,11 +178,17 @@ class HomeViewModel(
             })
             val summary = "server=${configWithNetwork.serverAddr} iface=${configWithNetwork.networkInterface} ip=${configWithNetwork.ipv4Addr} routerMac=${configWithNetwork.routerMac} socks=${configWithNetwork.socksListen}"
             val started = paqetRunner.startWithYaml(configWithNetwork.toPaqetYaml(logLevel = logLevel), summary)
-            if (started) onPaqetStarted?.invoke()
+            if (started) {
+                _connectedConfigId.value = config.id
+                onPaqetStarted?.invoke()
+            } else {
+                _connectedConfigId.value = null
+            }
         }
     }
 
     fun disconnect() {
+        _connectedConfigId.value = null
         _latencyMs.value = null
         paqetRunner.stop()
     }

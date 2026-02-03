@@ -29,6 +29,17 @@ class PaqetRunner(
 
     private var process: Process? = null
 
+    /** When true, process exit is due to [stop()]; do not treat as crash. */
+    @Volatile
+    private var stopRequested = false
+
+    /** Last config used for start; kept so we can restart on crash. Cleared on [stop()]. */
+    private var lastConfigYaml: String? = null
+    private var lastSessionSummary: String? = null
+
+    /** Called when paqet exits unexpectedly (crash). Arguments are last config for restart. */
+    var onCrashed: ((configYaml: String, sessionSummary: String?) -> Unit)? = null
+
     private val paqetDir: File
         get() = File(context.filesDir, "paqet").also { if (!it.exists()) it.mkdirs() }
 
@@ -135,6 +146,8 @@ class PaqetRunner(
         outputReaderThread?.join(500)
         outputReaderThread = null
         killAnyExistingPaqetBlocking()
+        lastConfigYaml = configYaml
+        lastSessionSummary = sessionSummary
         val configFile = File(paqetDir, "config_run.yaml")
         return try {
             configFile.writeText(configYaml)
@@ -149,6 +162,7 @@ class PaqetRunner(
                 .directory(paqetDir)
                 .redirectErrorStream(true)
                 .start()
+            stopRequested = false
             _isRunning.value = true
             val proc = process
             if (proc != null && logBuffer != null) {
@@ -167,9 +181,17 @@ class PaqetRunner(
                 }.apply { isDaemon = true; start() }
             }
             Thread {
-                process?.waitFor()
+                val exitCode = process?.waitFor() ?: -1
                 _isRunning.value = false
                 process = null
+                if (!stopRequested) {
+                    val yaml = lastConfigYaml
+                    val summary = lastSessionSummary
+                    if (yaml != null) {
+                        logBuffer?.append(AppLogBuffer.TAG_SESSION, "paqet exited unexpectedly (exitCode=$exitCode); will attempt restart if enabled")
+                        onCrashed?.invoke(yaml, summary)
+                    }
+                }
             }.start()
             true
         } catch (e: Exception) {
@@ -182,8 +204,12 @@ class PaqetRunner(
     /**
      * Stops and kills the running paqet process if any.
      * Sends destroy immediately; a background thread does wait, destroyForcibly, and killAnyExistingPaqet.
+     * Clears stored config so we do not auto-restart after user disconnect.
      */
     fun stop() {
+        stopRequested = true
+        lastConfigYaml = null
+        lastSessionSummary = null
         val p = process
         process = null
         _isRunning.value = false
