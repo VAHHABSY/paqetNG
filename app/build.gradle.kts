@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+import kotlin.collections.asSequence
+
 val jniLibsDir = file("src/main/jniLibs")
 val hevtunLib = "libhev-socks5-tunnel.so"
 val abis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
@@ -69,6 +74,32 @@ fun findNdkPath(): File? {
     val sdkPath = getProp("sdk.dir") ?: return null
     val sdkDir = File(sdkPath).absoluteFile
     if (!sdkDir.isDirectory) return null
+    return findNdkPathFromSdk(sdkDir)
+}
+fun getLocalProp(key: String): String? {
+    val localProp = rootProject.file("local.properties")
+    if (!localProp.exists()) return null
+    return localProp.readLines()
+        .firstOrNull { it.trimStart().startsWith("$key=") }
+        ?.substringAfter("=")?.trim()
+        ?.replace("\\\\", "\\")
+        ?.replace("\\:", ":")
+}
+fun findSdkPath(): File? {
+    System.getenv("ANDROID_HOME")?.let { File(it).takeIf { f -> f.isDirectory } }?.let { return it }
+    getLocalProp("sdk.dir")?.let { path -> File(path).absoluteFile.takeIf { it.isDirectory } }?.let { return it }
+    return null
+}
+fun findApksigner(): File? {
+    val sdk = findSdkPath() ?: return null
+    val buildTools = File(sdk, "build-tools")
+    if (!buildTools.isDirectory) return null
+    val versionDirs = buildTools.listFiles()?.filter { it.isDirectory && it.name.matches(Regex("^\\d+(\\.\\d+)+$")) }.orEmpty()
+    val latest = versionDirs.maxByOrNull { it.name } ?: return null
+    val apksigner = if (isWindows) File(latest, "apksigner.bat") else File(latest, "apksigner")
+    return apksigner.takeIf { it.exists() }
+}
+fun findNdkPathFromSdk(sdkDir: File): File? {
     val ndkRoot = File(sdkDir, "ndk")
     if (!ndkRoot.isDirectory) return null
     val versionDirs = ndkRoot.listFiles()?.filter { it.isDirectory && it.name.matches(Regex("^\\d+(\\.\\d+)+$")) }.orEmpty()
@@ -156,30 +187,74 @@ tasks.whenTaskAdded {
     }
 }
 
-// ABI-aware asset stripping: when building split APKs, strip other-ABI asset folders so each APK
-// only contains that ABI's paqet/tcpdump. Hook into merge*Assets tasks by name (AGP 9 compatible).
+// Simpler asset stripping for split APKs using AGP 9.0 androidComponents API
 val assetAbiDirs = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-tasks.whenTaskAdded {
-    val taskName = name
-    if (!taskName.startsWith("merge") || !taskName.endsWith("Assets")) return@whenTaskAdded
-    // Universal merge tasks (no ABI in name) are not stripped
-    val singleAbi = when {
-        taskName.contains("Arm64") || taskName.contains("arm64") -> "arm64-v8a"
-        taskName.contains("Armeabi") || taskName.contains("armeabi") -> "armeabi-v7a"
-        (taskName.contains("X86_64") || taskName.contains("x86_64")) -> "x86_64"
-        taskName.contains("X86") || taskName.contains("x86") -> "x86"
-        else -> null
-    }
-    if (singleAbi != null) {
-        doLast {
-            outputs.files.filter { it.isDirectory }.forEach { outDir ->
-                assetAbiDirs.filter { it != singleAbi }.forEach { other ->
-                    val f = file(outDir).resolve(other)
-                    if (f.exists()) f.deleteRecursively()
+
+androidComponents {
+    onVariants { variant ->
+        // Register a task that strips assets after packaging but before final output
+        val stripTaskName = "strip${variant.name.replaceFirstChar { it.uppercase() }}AbiAssets"
+        val stripTask = tasks.register(stripTaskName) {
+            doLast {
+                val apkDir = project.layout.buildDirectory
+                    .dir("outputs/apk/${variant.name}").get().asFile
+                if (!apkDir.isDirectory) {
+                    logger.lifecycle("No APK dir found: $apkDir")
+                    return@doLast
                 }
+                apkDir.walkTopDown()
+                    .filter { it.isFile && it.extension == "apk" }
+                    .forEach { apk ->
+                        val name = apk.name
+                        val keepAbi = when {
+                            name.contains("universal") -> null
+                            name.contains("arm64-v8a") -> "arm64-v8a"
+                            name.contains("armeabi-v7a") -> "armeabi-v7a"
+                            name.contains("x86_64") -> "x86_64"
+                            name.contains("x86") -> "x86"
+                            else -> null
+                        }
+                        if (keepAbi != null) {
+                            logger.lifecycle("Stripping non-$keepAbi assets from ${apk.name}")
+                            stripApkAssets(apk, keepAbi)
+                        }
+                    }
             }
         }
+        // Hook strip task after assemble
+        tasks.matching { it.name == "assemble${variant.name.replaceFirstChar { it.uppercase() }}" }.configureEach {
+            finalizedBy(stripTask)
+        }
     }
+}
+
+// Simple APK asset stripping - removes other-ABI asset folders from APK
+fun stripApkAssets(apkFile: File, keepAbi: String) {
+    val removeAbiPrefixes = assetAbiDirs.filter { it != keepAbi }.map { "assets/$it/" }
+    val tmpFile = File(apkFile.parentFile, "${apkFile.name}.tmp")
+    ZipFile(apkFile).use { zip ->
+        ZipOutputStream(tmpFile.outputStream()).use { out ->
+            zip.entries().asSequence()
+                .filterNot { entry -> removeAbiPrefixes.any { entry.name.startsWith(it) } }
+                .forEach { entry ->
+                    out.putNextEntry(ZipEntry(entry.name).apply {
+                        time = entry.time
+                        if (entry.method == ZipEntry.STORED) {
+                            method = ZipEntry.STORED
+                            size = entry.size
+                            compressedSize = entry.compressedSize
+                            crc = entry.crc
+                        }
+                    })
+                    if (!entry.isDirectory) {
+                        zip.getInputStream(entry).use { it.copyTo(out) }
+                    }
+                    out.closeEntry()
+                }
+        }
+    }
+    apkFile.delete()
+    tmpFile.renameTo(apkFile)
 }
 
 // Run buildPaqet at start of every build (fails if paqet binaries missing)
