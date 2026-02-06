@@ -9,7 +9,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -50,6 +49,4 @@ class ConfigRepository(private val context: Context) {
             prefs[CONFIGS_KEY] = gson.toJson(list)
         }
     }
-
-    suspend fun getById(id: String): PaqetConfig? = configs.first().find { it.id == id }
 }

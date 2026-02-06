@@ -107,9 +107,7 @@ class TcpdumpRunner(
             }
             Thread {
                 val proc = process
-                if (proc != null) {
-                    proc.waitFor()
-                }
+                proc?.waitFor()
                 _isRunning.value = false
                 process = null
             }.start()

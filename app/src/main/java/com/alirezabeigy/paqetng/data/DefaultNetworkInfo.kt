@@ -2,8 +2,6 @@ package com.alirezabeigy.paqetng.data
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.LinkProperties
-import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,11 +30,7 @@ class DefaultNetworkInfoProvider(private val context: Context) {
     suspend fun getDefaultNetworkInfo(): DefaultNetworkInfo? = withContext(Dispatchers.IO) {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return@withContext null
-        val network = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            cm.activeNetwork ?: return@withContext null
-        } else {
-            return@withContext null
-        }
+        val network = cm.activeNetwork ?: return@withContext null
         // Prefer LinkProperties (works well for WiFi); on cellular it often returns null.
         cm.getLinkProperties(network)?.let { lp ->
             val interfaceName = lp.interfaceName?.takeIf { it.isNotBlank() } ?: "wlan0"

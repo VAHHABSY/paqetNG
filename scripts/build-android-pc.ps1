@@ -79,7 +79,7 @@ New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 Write-Host "Building paqet for android/arm64..." -ForegroundColor Cyan
 Push-Location $PaqetSrc
 try {
-    go build -trimpath -o $outBinary ./cmd/main.go
+    go build -trimpath -ldflags "-extldflags '-Wl,-z,max-page-size=16384'" -o $outBinary ./cmd/main.go
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host "Done. Binary: $outBinary" -ForegroundColor Green
 } finally {

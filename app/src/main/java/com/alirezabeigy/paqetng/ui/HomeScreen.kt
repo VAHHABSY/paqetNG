@@ -1,52 +1,58 @@
 package com.alirezabeigy.paqetng.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.graphics.Bitmap
+import android.util.Log
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -55,9 +61,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,15 +72,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import android.util.Log
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.graphics.Bitmap
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.set
 import com.alirezabeigy.paqetng.data.PaqetConfig
 import com.alirezabeigy.paqetng.data.toPaqetYaml
 import com.alirezabeigy.paqetng.ui.theme.PaqetNGTheme
-import com.google.gson.Gson
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
@@ -84,16 +88,15 @@ import com.journeyapps.barcodescanner.ScanOptions
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    modifier: Modifier = Modifier,
     viewModel: HomeViewModel,
     onSettingsClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
     onConnect: ((PaqetConfig?) -> Unit)? = null,
-    onDisconnect: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onDisconnect: (() -> Unit)? = null
 ) {
     val configs by viewModel.configs.collectAsState(initial = emptyList())
     val isRunning by viewModel.isRunning.collectAsState(initial = false)
-    val rootAvailable by viewModel.rootAvailable.collectAsState(initial = null)
     val selectedConfigId by viewModel.selectedConfigId.collectAsState()
     val editorConfig by viewModel.editorConfig.collectAsState()
 
@@ -113,6 +116,21 @@ fun HomeScreen(
     val context = LocalContext.current
     val showAddConfigDialog by viewModel.showAddConfigDialog.collectAsState()
     val showRootRequiredDialog by viewModel.showRootRequiredDialog.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    
+    // Helper functions for export dialog state management
+    val dismissExportDialog = {
+        exportConfig = null
+        exportShowQr = false
+    }
+    val showExportQrCode = {
+        exportShowQr = true
+    }
+    val openExportDialog = { config: PaqetConfig ->
+        exportConfig = config
+        exportShowQr = false
+    }
 
     if (showRootRequiredDialog) {
         RootRequiredDialog(onDismiss = viewModel::dismissRootRequiredDialog)
@@ -129,8 +147,11 @@ fun HomeScreen(
                 val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.primaryClip
                 val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
                 if (!viewModel.addConfigFromImport(text)) {
-                    // Could show snackbar "Invalid or empty clipboard"
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Invalid or empty clipboard")
+                    }
                 }
+                viewModel.dismissAddConfigDialog()
             },
             onFromQrCode = {
                 qrScanLauncher.launch(ScanOptions())
@@ -143,26 +164,30 @@ fun HomeScreen(
     }
 
     if (exportConfig != null) {
+        val currentExportConfig = exportConfig!!
         ExportDialog(
-            config = exportConfig!!,
+            config = currentExportConfig,
             showQr = exportShowQr,
-            onDismiss = { exportConfig = null; exportShowQr = false },
+            onDismiss = dismissExportDialog,
             onCopyToClipboard = {
-                copyConfigToClipboard(context, exportConfig!!)
-                exportConfig = null
-                exportShowQr = false
+                copyConfigToClipboard(context, currentExportConfig)
+                dismissExportDialog()
             },
             onCopyFullConfigYaml = {
-                copyConfigYamlToClipboard(context, exportConfig!!)
-                exportConfig = null
-                exportShowQr = false
+                copyConfigYamlToClipboard(context, currentExportConfig)
+                dismissExportDialog()
             },
-            onShowQrCode = { exportShowQr = true }
+            onShowQrCode = showExportQrCode
         )
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { snackbarData ->
+                Snackbar(snackbarData)
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("paqetNG") },
@@ -224,7 +249,7 @@ fun HomeScreen(
                     onSelect = { viewModel.selectConfig(config.id) },
                     onEdit = { viewModel.openEdit(config) },
                     onDelete = { viewModel.deleteConfig(config.id) },
-                    onExport = { exportConfig = config; exportShowQr = false }
+                    onExport = { openExportDialog(config) }
                 )
             }
         }
@@ -291,8 +316,6 @@ private fun ConfigItem(
         }
     }
 }
-
-private val gson = Gson()
 
 @Composable
 private fun RootRequiredDialog(onDismiss: () -> Unit) {
@@ -393,9 +416,9 @@ private fun ExportDialog(
                         )
                         val w = matrix.width
                         val h = matrix.height
-                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        val bmp = createBitmap(w, h, Bitmap.Config.ARGB_8888)
                         for (x in 0 until w) for (y in 0 until h) {
-                            bmp.setPixel(x, y, if (matrix.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
+                            bmp[x, y] = if (matrix.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
                         }
                         bmp
                     }.getOrNull()
@@ -456,6 +479,7 @@ private val FAB_SIZE = 56.dp
 
 @Composable
 private fun ConnectPanel(
+    modifier: Modifier = Modifier,
     selectedConfig: PaqetConfig?,
     isRunning: Boolean,
     latencyMs: Int?,
@@ -463,8 +487,7 @@ private fun ConnectPanel(
     showLatencyInUi: Boolean = true,
     onStatusClick: () -> Unit,
     onConnect: () -> Unit,
-    onDisconnect: () -> Unit,
-    modifier: Modifier = Modifier
+    onDisconnect: () -> Unit
 ) {
     // Total height so FAB (56dp) with bottom 36dp from container bottom fits without clipping
     val totalHeight = FAB_OVERLAP_BOTTOM + FAB_SIZE

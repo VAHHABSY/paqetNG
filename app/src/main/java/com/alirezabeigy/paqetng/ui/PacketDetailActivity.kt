@@ -2,15 +2,14 @@ package com.alirezabeigy.paqetng.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.isSystemInDarkTheme
 import com.alirezabeigy.paqetng.data.SettingsRepository
 import com.alirezabeigy.paqetng.data.ThemePref
 import com.alirezabeigy.paqetng.ui.theme.PaqetNGTheme
@@ -63,7 +61,7 @@ class PacketDetailActivity : ComponentActivity() {
                     packetText = packetText,
                     onBack = { finish() },
                     onCopy = {
-                        (getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
+                        (getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager)
                             ?.setPrimaryClip(ClipData.newPlainText("tcpdump packet", packetText))
                     }
                 )
@@ -142,9 +140,9 @@ private fun ParsedSummary(packetText: String) {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        srcDst?.let { Text("$it", style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace) }
+        srcDst?.let { Text(it, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace) }
         flags?.let { Text("Flags: $it", style = MaterialTheme.typography.labelMedium, color = Color(0xFF1565C0)) }
-        seqAck?.let { Text("$it", style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace) }
+        seqAck?.let { Text(it, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace) }
         length?.let { Text("Length: $it", style = MaterialTheme.typography.labelMedium) }
     }
 }

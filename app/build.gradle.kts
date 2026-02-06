@@ -1,12 +1,11 @@
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
-
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipOutputStream
-import kotlin.collections.asSequence
 
 val jniLibsDir = file("src/main/jniLibs")
 val hevtunLib = "libhev-socks5-tunnel.so"
@@ -250,14 +249,13 @@ val stripSplitAbiAssets by tasks.register("stripSplitAbiAssets") {
                 if (keepAbi != null) {
                     stripApkAssets(apk, keepAbi)
                     if (shouldReSign && apk.absolutePath.contains("release")) {
-                        val config = releaseSigningConfig!!
-                        val keyPass = config.keyPassword ?: config.storePassword
+                        val keyPass = releaseSigningConfig.keyPassword ?: releaseSigningConfig.storePassword
                         val signedTmp = File(apk.parentFile, "${apk.nameWithoutExtension}-signed.apk")
                         val proc = ProcessBuilder(
-                            apksignerPath!!.absolutePath,
+                            apksignerPath.absolutePath,
                             "sign",
-                            "--ks", config.storeFile!!.absolutePath,
-                            "--ks-pass", "pass:${config.storePassword}",
+                            "--ks", releaseSigningConfig.storeFile!!.absolutePath,
+                            "--ks-pass", "pass:${releaseSigningConfig.storePassword}",
                             "--key-pass", "pass:$keyPass",
                             "--out", signedTmp.absolutePath,
                             apk.absolutePath

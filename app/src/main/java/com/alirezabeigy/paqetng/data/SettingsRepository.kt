@@ -18,8 +18,6 @@ private val SOCKS_PORT_KEY = intPreferencesKey("socks_port")
 private val LAST_SELECTED_CONFIG_ID_KEY = stringPreferencesKey("last_selected_config_id")
 private val CONNECTION_CHECK_URL_KEY = stringPreferencesKey("connection_check_url")
 private val CONNECTION_CHECK_TIMEOUT_KEY = intPreferencesKey("connection_check_timeout_seconds")
-private val START_ON_BOOT_KEY = booleanPreferencesKey("start_on_boot")
-private val PERSISTENT_NOTIFICATION_KEY = booleanPreferencesKey("persistent_notification")
 private val SHOW_LATENCY_IN_UI_KEY = booleanPreferencesKey("show_latency_in_ui")
 private val AUTO_RECONNECT_KEY = booleanPreferencesKey("auto_reconnect")
 private val SOCKS_LISTEN_LAN_KEY = booleanPreferencesKey("socks_listen_lan")
@@ -56,14 +54,6 @@ class SettingsRepository(private val context: Context) {
 
     val connectionCheckTimeoutSeconds: Flow<Int> = context.settingsDataStore.data.map { prefs ->
         prefs[CONNECTION_CHECK_TIMEOUT_KEY] ?: DEFAULT_CONNECTION_CHECK_TIMEOUT_SECONDS
-    }
-
-    val startOnBoot: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
-        prefs[START_ON_BOOT_KEY] ?: DEFAULT_START_ON_BOOT
-    }
-
-    val persistentNotification: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
-        prefs[PERSISTENT_NOTIFICATION_KEY] ?: DEFAULT_PERSISTENT_NOTIFICATION
     }
 
     val showLatencyInUi: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
@@ -113,22 +103,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setStartOnBoot(enabled: Boolean) {
-        context.settingsDataStore.edit { it[START_ON_BOOT_KEY] = enabled }
-    }
-
-    suspend fun setPersistentNotification(enabled: Boolean) {
-        context.settingsDataStore.edit { it[PERSISTENT_NOTIFICATION_KEY] = enabled }
-    }
-
-    suspend fun setShowLatencyInUi(enabled: Boolean) {
-        context.settingsDataStore.edit { it[SHOW_LATENCY_IN_UI_KEY] = enabled }
-    }
-
-    suspend fun setAutoReconnect(enabled: Boolean) {
-        context.settingsDataStore.edit { it[AUTO_RECONNECT_KEY] = enabled }
-    }
-
     suspend fun setSocksListenLan(enabled: Boolean) {
         context.settingsDataStore.edit { it[SOCKS_LISTEN_LAN_KEY] = enabled }
     }
@@ -151,8 +125,6 @@ class SettingsRepository(private val context: Context) {
         const val DEFAULT_CONNECTION_CHECK_TIMEOUT_SECONDS = 10
         const val MIN_CONNECTION_CHECK_TIMEOUT = 3
         const val MAX_CONNECTION_CHECK_TIMEOUT = 60
-        const val DEFAULT_START_ON_BOOT = false
-        const val DEFAULT_PERSISTENT_NOTIFICATION = true
         const val DEFAULT_SHOW_LATENCY_IN_UI = true
         const val DEFAULT_AUTO_RECONNECT = false
         const val DEFAULT_SOCKS_LISTEN_LAN = false

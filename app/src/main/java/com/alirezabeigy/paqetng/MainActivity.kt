@@ -20,11 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.alirezabeigy.paqetng.data.AppLogBuffer
+import com.alirezabeigy.paqetng.data.ConfigRepository
 import com.alirezabeigy.paqetng.data.PaqetConfig
 import com.alirezabeigy.paqetng.data.SettingsRepository
 import com.alirezabeigy.paqetng.data.ThemePref
-import com.alirezabeigy.paqetng.data.ConfigRepository
-import com.alirezabeigy.paqetng.paqet.PaqetRunner
 import com.alirezabeigy.paqetng.ui.HomeScreen
 import com.alirezabeigy.paqetng.ui.HomeViewModel
 import com.alirezabeigy.paqetng.ui.LogViewerScreen
@@ -64,10 +63,11 @@ class MainActivity : ComponentActivity() {
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            pendingConnectConfig?.let { doConnect(it) }
-        }
+        val config = pendingConnectConfig
         pendingConnectConfig = null
+        if (result.resultCode == RESULT_OK && config != null) {
+            doConnect(config)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +83,14 @@ class MainActivity : ComponentActivity() {
             var showSettings by remember { mutableStateOf(false) }
             var showLogViewer by remember { mutableStateOf(false) }
             var showPacketDump by remember { mutableStateOf(false) }
+            
+            // Helper functions to update screen state
+            val dismissPacketDump = { showPacketDump = false }
+            val dismissLogViewer = { showLogViewer = false }
+            val dismissSettings = { showSettings = false }
+            val showPacketDumpScreen = { showPacketDump = true }
+            val showLogViewerScreen = { showLogViewer = true }
+            val showSettingsScreen = { showSettings = true }
             val isRunning by viewModel.isRunning.collectAsState(initial = false)
             val connectionMode by settingsRepository.connectionMode.collectAsState(initial = SettingsRepository.DEFAULT_CONNECTION_MODE)
             val configs by viewModel.configs.collectAsState(initial = emptyList())
@@ -104,7 +112,7 @@ class MainActivity : ComponentActivity() {
             PaqetNGTheme(darkTheme = darkTheme) {
                 when {
                     showPacketDump -> {
-                        BackHandler { showPacketDump = false }
+                        BackHandler(onBack = dismissPacketDump)
                         PacketDumpScreen(
                             tcpdumpBuffer = app.tcpdumpBuffer,
                             tcpdumpRunner = app.tcpdumpRunner,
@@ -114,7 +122,7 @@ class MainActivity : ComponentActivity() {
                             latencyMs = latencyMs,
                             latencyTesting = latencyTesting,
                             onTestConnection = { viewModel.testLatency(selectedConfig) },
-                            onBack = { showPacketDump = false },
+                            onBack = dismissPacketDump,
                             onOpenPacketDetail = { packetText ->
                                 startActivity(
                                     Intent(this, PacketDetailActivity::class.java)
@@ -124,26 +132,26 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     showLogViewer -> {
-                        BackHandler { showLogViewer = false }
+                        BackHandler(onBack = dismissLogViewer)
                         LogViewerScreen(
                             logBuffer = logBuffer,
-                            onBack = { showLogViewer = false },
+                            onBack = dismissLogViewer,
                             isVpnConnected = isRunning,
-                            onPacketDumpClick = { showPacketDump = true }
+                            onPacketDumpClick = showPacketDumpScreen
                         )
                     }
                     showSettings -> {
-                        BackHandler { showSettings = false }
+                        BackHandler(onBack = dismissSettings)
                         SettingsScreen(
                             settingsRepository = settingsRepository,
-                            onBack = { showSettings = false }
+                            onBack = dismissSettings
                         )
                     }
                     else -> {
                         HomeScreen(
                             viewModel = viewModel,
-                            onSettingsClick = { showSettings = true },
-                            onLogsClick = { showLogViewer = true },
+                            onSettingsClick = showSettingsScreen,
+                            onLogsClick = showLogViewerScreen,
                             onConnect = { handleConnect(it, connectionMode) },
                             onDisconnect = { handleDisconnect() }
                         )
@@ -178,7 +186,6 @@ class MainActivity : ComponentActivity() {
             logBuffer.append(AppLogBuffer.TAG_VPN, "Paqet started; waiting for SOCKS to bind then starting VPN…")
             // Give paqet time to bind to 127.0.0.1:socksPort before tun2socks tries to connect (same idea as v2rayNG).
             val runnable = Runnable {
-                pendingVpnStartRunnable = null
                 logBuffer.append(AppLogBuffer.TAG_VPN, "VPN starting port=${config.socksPort()} config=${config.name.ifEmpty { config.serverAddr }}")
                 val intent = Intent(this, PaqetNGVpnService::class.java)
                     .putExtra(PaqetNGVpnService.EXTRA_SOCKS_PORT, config.socksPort())
@@ -187,6 +194,8 @@ class MainActivity : ComponentActivity() {
                 } else {
                     startService(intent)
                 }
+                // Clear the reference after execution to allow cancellation if needed
+                pendingVpnStartRunnable = null
             }
             pendingVpnStartRunnable = runnable
             mainHandler.postDelayed(runnable, 800)

@@ -46,7 +46,6 @@ import com.alirezabeigy.paqetng.data.ThemePref
 import kotlinx.coroutines.launch
 
 private object SettingsSpacing {
-    val screenHorizontal = 24.dp
     val screenVertical = 24.dp
     val sectionSpacing = 28.dp
     val sectionTitleBottom = 12.dp

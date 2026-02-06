@@ -40,7 +40,6 @@ class HomeViewModel(
     val configs: StateFlow<List<PaqetConfig>> = configRepository.configs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val isRunning: StateFlow<Boolean> = paqetRunner.isRunning
-    val rootAvailable: StateFlow<Boolean?> = paqetRunner.rootAvailable
 
     private val _selectedConfigId = MutableStateFlow<String?>(null)
     val selectedConfigId: StateFlow<String?> = _selectedConfigId.asStateFlow()

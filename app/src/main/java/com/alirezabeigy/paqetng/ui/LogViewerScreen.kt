@@ -37,11 +37,11 @@ import com.alirezabeigy.paqetng.data.AppLogBuffer
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogViewerScreen(
+    modifier: Modifier = Modifier,
     logBuffer: AppLogBuffer,
     onBack: () -> Unit,
     isVpnConnected: Boolean = false,
-    onPacketDumpClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onPacketDumpClick: () -> Unit = {}
 ) {
     val lines by logBuffer.lines.collectAsState(initial = emptyList())
     val listState = rememberLazyListState()

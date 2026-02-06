@@ -202,11 +202,7 @@ class PaqetRunner(
             }
             Thread {
                 val proc = process
-                val exitCode = if (proc != null) {
-                    proc.waitFor()
-                } else {
-                    -1
-                }
+                val exitCode = proc?.waitFor() ?: -1
                 _isRunning.value = false
                 process = null
                 if (!stopRequested) {

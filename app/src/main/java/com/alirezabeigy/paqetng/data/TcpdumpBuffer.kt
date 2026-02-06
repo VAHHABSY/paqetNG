@@ -26,9 +26,6 @@ class TcpdumpBuffer(private val maxLines: Int = 5000) {
     /** Full text for export (newest last). */
     fun getFullText(separator: String = "\n"): String = list.joinToString(separator)
 
-    /** Returns the line at [index], or null. */
-    fun getLine(index: Int): String? = list.getOrNull(index)
-
     /**
      * Returns the full "packet" block containing the line at [index].
      * tcpdump -v can output multiple lines per packet; lines that don't start with a timestamp
@@ -37,7 +34,7 @@ class TcpdumpBuffer(private val maxLines: Int = 5000) {
      */
     fun getPacketBlock(index: Int): String {
         val size = list.size
-        if (index < 0 || index >= size) return list.getOrNull(index) ?: ""
+        if (index !in 0..<size) return list.getOrNull(index) ?: ""
         var start = index
         while (start > 0 && !isPacketStartLine(list[start - 1])) start--
         var end = index

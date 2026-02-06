@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -24,7 +25,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Android VPN that creates a tun interface and forwards traffic to the local SOCKS5 port via tun2socks.
@@ -84,7 +84,15 @@ class PaqetNGVpnService : VpnService() {
             return START_NOT_STICKY
         }
         // Must call startForeground within ~5s to avoid ANR; do it immediately with "Connecting..."
-        startForeground(NOTIFICATION_ID, buildNotification(connecting = true))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(connecting = true),
+                FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification(connecting = true))
+        }
         serviceScope.launch {
             val success = withContext(Dispatchers.IO) {
                 if (vpnInterface != null) {
@@ -92,7 +100,7 @@ class PaqetNGVpnService : VpnService() {
                     vpnInterface?.close()
                     vpnInterface = null
                 }
-                establishVpn(socksPort)
+                establishVpn()
             }
             if (!success) {
                 Log.e(TAG, "Failed to establish VPN - stopping service")
@@ -103,7 +111,15 @@ class PaqetNGVpnService : VpnService() {
                 startTun2Socks(socksPort)
             }
             // Update notification to "VPN connected"; notify Quick Settings tile
-            startForeground(NOTIFICATION_ID, buildNotification(connecting = false))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification(connecting = false),
+                    FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification(connecting = false))
+            }
             sendBroadcast(Intent(ACTION_VPN_STARTED).setPackage(packageName))
         }
         return START_STICKY
@@ -118,13 +134,11 @@ class PaqetNGVpnService : VpnService() {
     /** Tears down VPN (tun, tun2socks, foreground) so the OS drops the VPN. */
     private fun tearDown() {
         sendBroadcast(Intent(ACTION_VPN_STOPPED).setPackage(packageName))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            if (Build.VERSION.SDK_INT >= 31) {
-                stopForeground(Service.STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
+        if (Build.VERSION.SDK_INT >= 31) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
@@ -142,7 +156,7 @@ class PaqetNGVpnService : VpnService() {
         vpnInterface = null
     }
 
-    private fun establishVpn(socksPort: Int): Boolean {
+    private fun establishVpn(): Boolean {
         return try {
             val builder = Builder()
                 .setSession(getString(R.string.app_name))

@@ -7,9 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.alirezabeigy.paqetng.data.AppLogBuffer
-import com.alirezabeigy.paqetng.data.PacketDumpBuffer
-import com.alirezabeigy.paqetng.data.TcpdumpBuffer
 import com.alirezabeigy.paqetng.data.SettingsRepository
+import com.alirezabeigy.paqetng.data.TcpdumpBuffer
 import com.alirezabeigy.paqetng.paqet.PaqetRunner
 import com.alirezabeigy.paqetng.paqet.TcpdumpRunner
 import com.alirezabeigy.paqetng.vpn.PaqetNGVpnService
@@ -28,7 +27,6 @@ import kotlinx.coroutines.launch
 class PaqetNGApplication : Application() {
 
     val logBuffer: AppLogBuffer = AppLogBuffer()
-    val packetDumpBuffer: PacketDumpBuffer = PacketDumpBuffer()
     val tcpdumpBuffer: TcpdumpBuffer = TcpdumpBuffer()
     val paqetRunner: PaqetRunner by lazy { PaqetRunner(this, logBuffer) }
     val tcpdumpRunner: TcpdumpRunner by lazy { TcpdumpRunner(this, tcpdumpBuffer) }

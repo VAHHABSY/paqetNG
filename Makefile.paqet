@@ -71,7 +71,7 @@ android-arm64: $(LIBPCAP_ARM64)/lib/libpcap.a
 	CGO_CFLAGS="-I$(abspath $(LIBPCAP_ARM64)/include)" \
 	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_ARM64)/lib) -lpcap" \
 	go build -trimpath \
-		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-ldflags "-s -w -extldflags '-Wl,-z,max-page-size=16384' -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
 		-o $(BUILD_DIR)/paqet_android_arm64 ./cmd/main.go
 	@echo "Built: $(BUILD_DIR)/paqet_android_arm64"
 
@@ -84,7 +84,7 @@ android-arm: $(LIBPCAP_ARM)/lib/libpcap.a
 	CGO_CFLAGS="-I$(abspath $(LIBPCAP_ARM)/include) -mfloat-abi=softfp -marm" \
 	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_ARM)/lib) -lpcap -mfloat-abi=softfp -marm" \
 	go build -trimpath \
-		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-ldflags "-s -w -extldflags '-Wl,-z,max-page-size=16384' -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
 		-o $(BUILD_DIR)/paqet_android_arm ./cmd/main.go
 	@echo "Built: $(BUILD_DIR)/paqet_android_arm"
 
@@ -113,7 +113,7 @@ android-x86: $(LIBPCAP_X86)/lib/libpcap.a
 	CGO_CFLAGS="-I$(abspath $(LIBPCAP_X86)/include)" \
 	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_X86)/lib) -lpcap" \
 	go build -trimpath \
-		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-ldflags "-s -w -extldflags '-Wl,-z,max-page-size=16384' -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
 		-o $(BUILD_DIR)/paqet_android_x86 ./cmd/main.go
 	@echo "Built: $(BUILD_DIR)/paqet_android_x86"
 
@@ -126,7 +126,7 @@ android-x86_64: $(LIBPCAP_X64)/lib/libpcap.a
 	CGO_CFLAGS="-I$(abspath $(LIBPCAP_X64)/include)" \
 	CGO_LDFLAGS="-L$(abspath $(LIBPCAP_X64)/lib) -lpcap" \
 	go build -trimpath \
-		-ldflags "-s -w -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
+		-ldflags "-s -w -extldflags '-Wl,-z,max-page-size=16384' -X 'paqet/cmd/version.Version=$(VERSION)' -X 'paqet/cmd/version.GitCommit=$(GIT_COMMIT)' -X 'paqet/cmd/version.GitTag=$(GIT_TAG)' -X 'paqet/cmd/version.BuildTime=$(BUILD_TIME)'" \
 		-o $(BUILD_DIR)/paqet_android_x86_64 ./cmd/main.go
 	@echo "Built: $(BUILD_DIR)/paqet_android_x86_64"
 

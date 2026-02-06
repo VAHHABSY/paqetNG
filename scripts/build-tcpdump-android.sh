@@ -148,14 +148,14 @@ esac
 export CC="$CLANG"
 export CPPFLAGS="-I$LIBPCAP_DIR/include"
 export CFLAGS="--sysroot=$NDK_SYSROOT -fPIC -I$LIBPCAP_DIR/include $FLOAT_ABI $ARM_FLAGS"
-export LDFLAGS="--sysroot=$NDK_SYSROOT -L$LIBPCAP_DIR/lib $FLOAT_ABI $ARM_FLAGS $LDFLAGS_EXTRA"
+export LDFLAGS="--sysroot=$NDK_SYSROOT -L$LIBPCAP_DIR/lib $FLOAT_ABI $ARM_FLAGS $LDFLAGS_EXTRA -Wl,-z,max-page-size=16384"
 export LIBS="-lpcap -lc"
 # Prevent configure from using host pkg-config
 export PKG_CONFIG=""
 # Pass LDFLAGS and LIBS on command line so generated Makefile definitely uses them (bionic shim + -lc)
 # Tell configure libpcap provides these (cross-compile link tests fail; without this tcpdump compiles its own copies → duplicate symbol errors)
 ../configure --host="$HOST" --with-pcap=linux --without-crypto --disable-smb \
-	LDFLAGS="--sysroot=$NDK_SYSROOT -L$LIBPCAP_DIR/lib $FLOAT_ABI $ARM_FLAGS $LDFLAGS_EXTRA" \
+	LDFLAGS="--sysroot=$NDK_SYSROOT -L$LIBPCAP_DIR/lib $FLOAT_ABI $ARM_FLAGS $LDFLAGS_EXTRA -Wl,-z,max-page-size=16384" \
 	LIBS="-lpcap -lc" \
 	ac_cv_func_pcap_loop=yes \
 	ac_cv_func_pcap_list_datalinks=yes \

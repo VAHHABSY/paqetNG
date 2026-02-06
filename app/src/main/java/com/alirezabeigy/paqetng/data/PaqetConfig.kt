@@ -75,16 +75,16 @@ data class PaqetConfig(
                 return try {
                     val withoutScheme = t.removePrefix("paqet://")
                     val hashIndex = withoutScheme.indexOf('#')
-                    val beforeFragment = if (hashIndex < 0) withoutScheme else withoutScheme.substring(0, hashIndex)
+                    val beforeFragment = if (hashIndex < 0) withoutScheme else withoutScheme.take(hashIndex)
                     val fragment = if (hashIndex < 0) null else withoutScheme.substring(hashIndex + 1)
                     val name = fragment?.let { java.net.URLDecoder.decode(it, Charsets.UTF_8.name()) }?.takeIf { it.isNotEmpty() }
                     val queryStart = beforeFragment.indexOf('?')
-                    val authority = if (queryStart < 0) beforeFragment else beforeFragment.substring(0, queryStart)
+                    val authority = if (queryStart < 0) beforeFragment else beforeFragment.take(queryStart)
                     val queryString = if (queryStart < 0) "" else beforeFragment.substring(queryStart + 1)
                     val params = queryString.split('&').associate { part ->
                         val eq = part.indexOf('=')
                         if (eq < 0) part to ""
-                        else part.substring(0, eq) to java.net.URLDecoder.decode(part.substring(eq + 1), Charsets.UTF_8.name())
+                        else part.take(eq) to java.net.URLDecoder.decode(part.substring(eq + 1), Charsets.UTF_8.name())
                     }
                     fun get(key: String) = params[key]?.takeIf { it.isNotEmpty() }
                     val resolvedName = name ?: authority
