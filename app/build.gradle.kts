@@ -281,6 +281,51 @@ afterEvaluate {
     tasks.named("preBuild").configure { dependsOn(buildPaqet) }
 }
 
+// Extract version from git tag or environment variable, fallback to default
+fun getVersionName(): String {
+    val envVersion = System.getenv("VERSION_NAME")
+    if (envVersion != null && envVersion.isNotBlank()) {
+        return envVersion.trim().removePrefix("v")
+    }
+    
+    // Try to get version from git tag (for local builds)
+    try {
+        val process = ProcessBuilder("git", "describe", "--tags", "--exact-match", "--abbrev=0")
+            .directory(rootDir)
+            .redirectErrorStream(true)
+            .start()
+        val exitCode = process.waitFor()
+        if (exitCode == 0) {
+            val gitTag = process.inputStream.bufferedReader().readText().trim()
+            if (gitTag.isNotEmpty()) {
+                return gitTag.removePrefix("v")
+            }
+        }
+    } catch (_: Exception) {
+        // Git command failed or not available, use default
+    }
+    
+    return "1.0"
+}
+
+fun getVersionCode(): Int {
+    val envCode = System.getenv("VERSION_CODE")
+    if (envCode != null) return envCode.toIntOrNull() ?: 1
+    
+    val versionName = getVersionName()
+    // Parse version like "1.0.3" -> versionCode 1003 (major*1000 + minor*100 + patch)
+    val parts = versionName.split(".").mapNotNull { it.toIntOrNull() }
+    if (parts.size >= 3) {
+        return parts[0] * 1000 + parts[1] * 100 + parts[2]
+    } else if (parts.size == 2) {
+        return parts[0] * 1000 + parts[1] * 100
+    } else if (parts.size == 1) {
+        return parts[0] * 1000
+    }
+    
+    return 1
+}
+
 android {
     namespace = "com.alirezabeigy.paqetng"
     compileSdk {
@@ -291,8 +336,8 @@ android {
         applicationId = "com.alirezabeigy.paqetng"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = getVersionCode()
+        versionName = getVersionName()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

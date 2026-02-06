@@ -26,14 +26,19 @@ class ConfigRepository(private val context: Context) {
             .map { it.withDefaults() }
     }
 
-    suspend fun add(config: PaqetConfig) {
+    suspend fun add(config: PaqetConfig): String {
+        var newId = config.id
+        if (newId.isEmpty()) {
+            newId = UUID.randomUUID().toString()
+        }
         context.dataStore.edit { prefs ->
             val list = (gson.fromJson<List<PaqetConfig>>(prefs[CONFIGS_KEY] ?: "[]", type) ?: emptyList())
                 .map { it.withDefaults() }
                 .toMutableList()
-            list.add(config.withDefaults().copy(id = config.id.ifEmpty { UUID.randomUUID().toString() }))
+            list.add(config.withDefaults().copy(id = newId))
             prefs[CONFIGS_KEY] = gson.toJson(list)
         }
+        return newId
     }
 
     suspend fun update(config: PaqetConfig) {

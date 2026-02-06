@@ -85,24 +85,24 @@ data class PaqetConfig(
         val safeKcpMode = try {
             val mode = kcpMode
             if (mode.isEmpty() || mode !in KcpModeOptions.all) KcpModeOptions.default else mode
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             KcpModeOptions.default
         }
         val safeKcpBlock = try {
             val block = kcpBlock
             if (block.isEmpty() || block !in KcpBlockOptions.all) KcpBlockOptions.default else block
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             KcpBlockOptions.default
         }
         val safeSocksListen = try {
             val listen = socksListen
             if (listen.isEmpty()) "127.0.0.1:1284" else listen
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             "127.0.0.1:1284"
         }
         val isManualMode = safeKcpMode == "manual"
         return copy(
-            conn = if (conn <= 0 || conn > 256) 1 else conn,
+            conn = if (conn !in 1..256) 1 else conn,
             kcpMode = safeKcpMode,
             mtu = if (mtu <= 0 || mtu < 50 || mtu > 1500) 1350 else mtu,
             kcpBlock = safeKcpBlock,
@@ -111,42 +111,42 @@ data class PaqetConfig(
             kcpNodelay = if (isManualMode) {
                 try {
                     kcpNodelay?.coerceIn(0, 1) ?: KcpManualDefaults.nodelay
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     KcpManualDefaults.nodelay
                 }
             } else null,
             kcpInterval = if (isManualMode) {
                 try {
                     kcpInterval?.coerceIn(10, 5000) ?: KcpManualDefaults.interval
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     KcpManualDefaults.interval
                 }
             } else null,
             kcpResend = if (isManualMode) {
                 try {
                     kcpResend?.coerceIn(0, 2) ?: KcpManualDefaults.resend
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     KcpManualDefaults.resend
                 }
             } else null,
             kcpNocongestion = if (isManualMode) {
                 try {
                     kcpNocongestion?.coerceIn(0, 1) ?: KcpManualDefaults.nocongestion
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     KcpManualDefaults.nocongestion
                 }
             } else null,
             kcpWdelay = if (isManualMode) {
                 try {
                     kcpWdelay ?: KcpManualDefaults.wdelay
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     KcpManualDefaults.wdelay
                 }
             } else null,
             kcpAcknodelay = if (isManualMode) {
                 try {
                     kcpAcknodelay ?: KcpManualDefaults.acknodelay
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     KcpManualDefaults.acknodelay
                 }
             } else null

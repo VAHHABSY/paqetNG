@@ -66,6 +66,9 @@ class HomeViewModel(
     private val _showRootRequiredDialog = MutableStateFlow(false)
     val showRootRequiredDialog: StateFlow<Boolean> = _showRootRequiredDialog.asStateFlow()
 
+    private val _deleteConfigId = MutableStateFlow<String?>(null)
+    val deleteConfigId: StateFlow<String?> = _deleteConfigId.asStateFlow()
+
     private val gson = Gson()
 
     init {
@@ -101,7 +104,9 @@ class HomeViewModel(
                 id = "",
                 socksListen = config.socksListen.ifEmpty { "127.0.0.1:$port" }
             )
-            configRepository.add(withPort)
+            val newId = configRepository.add(withPort)
+            // Auto-select the newly imported profile
+            selectConfig(newId)
             _showAddConfigDialog.value = false
         }
         return true
@@ -137,13 +142,24 @@ class HomeViewModel(
 
     fun saveConfig(config: PaqetConfig) {
         viewModelScope.launch {
-            if (config.id.isEmpty()) configRepository.add(config)
-            else configRepository.update(config)
+            if (config.id.isEmpty()) {
+                val newId = configRepository.add(config)
+                // Auto-select the newly created profile
+                selectConfig(newId)
+            } else {
+                configRepository.update(config)
+            }
             _editorConfig.value = null
         }
     }
 
-    fun deleteConfig(id: String) {
+    fun requestDeleteConfig(id: String) {
+        _deleteConfigId.value = id
+    }
+
+    fun confirmDeleteConfig() {
+        val id = _deleteConfigId.value ?: return
+        _deleteConfigId.value = null
         viewModelScope.launch {
             configRepository.delete(id)
             if (_selectedConfigId.value == id) {
@@ -151,6 +167,10 @@ class HomeViewModel(
                 settingsRepository.setLastSelectedConfigId(null)
             }
         }
+    }
+
+    fun cancelDeleteConfig() {
+        _deleteConfigId.value = null
     }
 
     /**

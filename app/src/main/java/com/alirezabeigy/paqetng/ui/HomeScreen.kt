@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,6 +100,7 @@ fun HomeScreen(
     val isRunning by viewModel.isRunning.collectAsState(initial = false)
     val selectedConfigId by viewModel.selectedConfigId.collectAsState()
     val editorConfig by viewModel.editorConfig.collectAsState()
+    val deleteConfigId by viewModel.deleteConfigId.collectAsState()
 
     if (editorConfig != null) {
         BackHandler { viewModel.dismissEditor() }
@@ -134,6 +136,16 @@ fun HomeScreen(
 
     if (showRootRequiredDialog) {
         RootRequiredDialog(onDismiss = viewModel::dismissRootRequiredDialog)
+    }
+
+    // Delete confirmation dialog
+    val configToDelete = deleteConfigId?.let { id -> configs.find { it.id == id } }
+    if (configToDelete != null) {
+        DeleteConfirmDialog(
+            config = configToDelete,
+            onConfirm = viewModel::confirmDeleteConfig,
+            onDismiss = viewModel::cancelDeleteConfig
+        )
     }
 
     val qrScanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
@@ -248,7 +260,7 @@ fun HomeScreen(
                     isSelected = config.id == selectedConfigId,
                     onSelect = { viewModel.selectConfig(config.id) },
                     onEdit = { viewModel.openEdit(config) },
-                    onDelete = { viewModel.deleteConfig(config.id) },
+                    onDelete = { viewModel.requestDeleteConfig(config.id) },
                     onExport = { openExportDialog(config) }
                 )
             }
@@ -331,6 +343,40 @@ private fun RootRequiredDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             Button(onClick = onDismiss) { Text("Skip") }
+        }
+    )
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    config: PaqetConfig,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete profile") },
+        text = {
+            Text(
+                "Are you sure you want to delete \"${config.name.ifEmpty { config.serverAddr }}\"? This action cannot be undone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
     )
 }

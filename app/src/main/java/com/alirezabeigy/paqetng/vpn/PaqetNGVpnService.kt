@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
 import android.net.ConnectivityManager
@@ -143,7 +142,7 @@ class PaqetNGVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
                 connectivityManager.unregisterNetworkCallback(defaultNetworkCallback)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Callback may not have been registered
             }
         }
