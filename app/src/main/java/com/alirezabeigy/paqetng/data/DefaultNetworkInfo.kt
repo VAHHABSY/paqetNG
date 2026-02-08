@@ -3,6 +3,7 @@ package com.alirezabeigy.paqetng.data
 import android.content.Context
 import android.net.ConnectivityManager
 import android.util.Log
+import com.alirezabeigy.paqetng.util.ShizukuHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -62,7 +63,7 @@ class DefaultNetworkInfoProvider(private val context: Context) {
      */
     private fun getDefaultNetworkInfoViaRoot(): DefaultNetworkInfo? {
         // ip route get 8.8.8.8 → e.g. "8.8.8.8 from 10.0.0.1 dev rmnet_data0 src 10.0.0.2 uid 0"
-        val routeOut = runSuCommand("ip route get 8.8.8.8")
+        val routeOut = runPrivilegedCommand("ip route get 8.8.8.8")
         if (routeOut.isNullOrBlank()) {
             Log.w(TAG, "getDefaultNetworkInfoViaRoot: ip route get 8.8.8.8 returned empty")
             return null
@@ -73,7 +74,7 @@ class DefaultNetworkInfoProvider(private val context: Context) {
         val viaMatch = Regex("""\bvia\s+(\S+)""").find(routeOut)
         val iface = devMatch?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
             ?: run {
-                val defaultRoute = runSuCommand("ip route show default")
+                val defaultRoute = runPrivilegedCommand("ip route show default")
                 defaultRoute?.let { line ->
                     Regex("""default\s+via\s+\S+\s+dev\s+(\S+)""").find(line)?.groupValues?.get(1)
                 }
@@ -84,7 +85,7 @@ class DefaultNetworkInfoProvider(private val context: Context) {
         }
         var srcIp = srcMatch?.groupValues?.get(1)
         if (srcIp.isNullOrBlank()) {
-            val addrOut = runSuCommand("ip -4 addr show dev $iface")
+            val addrOut = runPrivilegedCommand("ip -4 addr show dev $iface")
             addrOut?.let { output ->
                 Regex("""inet\s+(\d+\.\d+\.\d+\.\d+)""").find(output)?.let { m ->
                     srcIp = m.groupValues[1]
@@ -119,20 +120,20 @@ class DefaultNetworkInfoProvider(private val context: Context) {
     }
 
     /**
-     * Run `su -c "cat /proc/net/arp"` then fallback to `ip neigh show` to get gateway MAC (root required).
+     * Run `cat /proc/net/arp` or `ip neigh show` to get gateway MAC (requires privileged access).
      */
     private fun readMacFromArpViaRoot(ip: String): String? {
         if (ip.isEmpty()) return null
-        val arpOut = runSuCommand("cat /proc/net/arp")
-        Log.d(TAG, "readMacFromArpViaRoot: su cat /proc/net/arp exit, length=${arpOut?.length}, preview=${arpOut?.take(400)}")
+        val arpOut = runPrivilegedCommand("cat /proc/net/arp")
+        Log.d(TAG, "readMacFromArpViaRoot: privileged cat /proc/net/arp exit, length=${arpOut?.length}, preview=${arpOut?.take(400)}")
         arpOut?.let { output ->
             parseArpOutput(output, ip)?.let { mac ->
                 Log.d(TAG, "readMacFromArpViaRoot: parsed MAC from arp: $mac")
                 return mac
             }
         }
-        val neighOut = runSuCommand("ip neigh show")
-        Log.d(TAG, "readMacFromArpViaRoot: su ip neigh show length=${neighOut?.length}, preview=${neighOut?.take(400)}")
+        val neighOut = runPrivilegedCommand("ip neigh show")
+        Log.d(TAG, "readMacFromArpViaRoot: privileged ip neigh show length=${neighOut?.length}, preview=${neighOut?.take(400)}")
         neighOut?.lines()?.forEach { line ->
             val parts = line.split(Regex("\\s+"))
             if (parts.isNotEmpty() && parts[0] == ip) {
@@ -150,22 +151,8 @@ class DefaultNetworkInfoProvider(private val context: Context) {
         return null
     }
 
-    private fun runSuCommand(cmd: String): String? {
-        return try {
-            val process = ProcessBuilder("su", "-c", cmd)
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().readText()
-            val exitCode = process.waitFor()
-            if (exitCode != 0) {
-                Log.w(TAG, "runSuCommand: cmd=$cmd exitCode=$exitCode output=${output.take(200)}")
-                return null
-            }
-            output
-        } catch (e: Exception) {
-            Log.w(TAG, "runSuCommand: cmd=$cmd exception=${e.message}", e)
-            null
-        }
+    private fun runPrivilegedCommand(cmd: String): String? {
+        return ShizukuHelper.executePrivilegedCommand(cmd)
     }
 
     /**

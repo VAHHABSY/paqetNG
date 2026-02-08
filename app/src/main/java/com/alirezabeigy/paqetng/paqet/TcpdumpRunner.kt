@@ -3,6 +3,7 @@ package com.alirezabeigy.paqetng.paqet
 import android.content.Context
 import android.os.Build
 import com.alirezabeigy.paqetng.data.TcpdumpBuffer
+import com.alirezabeigy.paqetng.util.ShizukuHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,11 +72,11 @@ class TcpdumpRunner(
      * Starts tcpdump: -l (line buffered), -n (no DNS), -v (verbose, shows flags).
      * [interfaceName]: use this interface (e.g. "tun0" for VPN, "wlan0" for SOCKS-only). If null, uses [tunInterface] (tun0).
      * [hostFilter]: if set (e.g. server IP or hostname), only packets to/from that host are shown.
-     * Runs as root. Append each line to [tcpdumpBuffer].
+     * Runs with privileged access. Append each line to [tcpdumpBuffer].
      */
     fun start(hostFilter: String? = null, interfaceName: String? = null): Boolean {
         if (!ensureBinary()) return false
-        if (!isRootAvailableBlocking()) return false
+        if (!isPrivilegedAccessAvailableBlocking()) return false
         stop()
         outputReaderThread?.join(500)
         outputReaderThread = null
@@ -85,10 +86,7 @@ class TcpdumpRunner(
         val hostExpr = hostFilter?.trim()?.takeIf { it.isNotBlank() }?.let { " host $it" } ?: ""
         val cmd = "$binaryPath -i $iface -l -n -v$hostExpr 2>&1"
         return try {
-            process = ProcessBuilder("su", "-c", cmd)
-                .directory(tcpdumpDir)
-                .redirectErrorStream(true)
-                .start()
+            process = createPrivilegedProcess(cmd, tcpdumpDir)
             _isRunning.value = true
             val proc = process
             if (proc != null) {
@@ -155,27 +153,27 @@ class TcpdumpRunner(
         }
     }
 
-    private fun isRootAvailableBlocking(): Boolean {
-        return try {
-            val p = ProcessBuilder("su", "-c", "id")
-                .redirectErrorStream(true)
-                .start()
-            val exit = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                p.waitFor(5, TimeUnit.SECONDS)
-            } else {
-                // For API < 26, use a thread with timeout
-                var exited = false
-                val thread = Thread {
-                    exited = p.waitFor() == 0
-                }
-                thread.start()
-                thread.join(5000)
-                exited
+    private fun isPrivilegedAccessAvailableBlocking(): Boolean {
+        return ShizukuHelper.isPrivilegedExecutionAvailable()
+    }
+
+    private fun createPrivilegedProcess(cmd: String, workingDir: File): Process? {
+        return if (ShizukuHelper.isShizukuAvailable()) {
+            try {
+                Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, workingDir)
+            } catch (e: Exception) {
+                null
             }
-            p.destroy()
-            exit
-        } catch (_: Exception) {
-            false
+        } else {
+            // Fallback to root
+            try {
+                ProcessBuilder("su", "-c", cmd)
+                    .directory(workingDir)
+                    .redirectErrorStream(true)
+                    .start()
+            } catch (e: Exception) {
+                null
+            }
         }
     }
 

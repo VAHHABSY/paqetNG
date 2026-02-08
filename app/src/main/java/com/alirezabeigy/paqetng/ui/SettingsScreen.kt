@@ -13,11 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.alirezabeigy.paqetng.R
 import com.alirezabeigy.paqetng.data.SettingsRepository
 import com.alirezabeigy.paqetng.data.ThemePref
+import com.alirezabeigy.paqetng.util.ShizukuHelper
 import kotlinx.coroutines.launch
 
 private object SettingsSpacing {
@@ -192,6 +189,38 @@ fun SettingsScreen(
                         },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
+                )
+            }
+
+            // ——— Advanced ———
+            PreferenceSection(title = "Advanced") {
+                val context = LocalContext.current
+                val shizukuInstalled = remember { ShizukuHelper.isShizukuInstalled(context) }
+                val shizukuAvailable = remember { ShizukuHelper.isShizukuAvailable() }
+
+                ListItem(
+                    headlineContent = { Text("Shizuku Integration") },
+                    supportingContent = {
+                        Text(
+                            when {
+                                !shizukuInstalled -> "Shizuku not installed. Install Shizuku to avoid requiring root access."
+                                !shizukuAvailable -> "Shizuku installed but not authorized. Tap to grant permission."
+                                else -> "Shizuku is available and authorized."
+                            }
+                        )
+                    },
+                    trailingContent = {
+                        if (!shizukuAvailable) {
+                            androidx.compose.material3.Button(
+                                onClick = { ShizukuHelper.requestPermission(context) }
+                            ) {
+                                Text("Grant")
+                            }
+                        }
+                    },
+                    colors = ListItemDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
                 )
             }
         }

@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!-- Shizuku permissions -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
     <application
         android:name=".PaqetNGApplication"
         android:allowBackup="true"
@@ -66,6 +69,14 @@
                 android:name="android.app.FOREGROUND_SERVICE_TYPE_SPECIAL_USE"
                 android:value="This service provides a Quick Settings tile that allows users to quickly toggle VPN connection on/off from the notification panel. The foreground service type is required for Quick Settings tile functionality." />
         </service>
+
+        <!-- Shizuku provider -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="moe.shizuku.manager.permission.API_V23" />
     </application>
 
 </manifest>

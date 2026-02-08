@@ -11,6 +11,7 @@ import com.alirezabeigy.paqetng.data.SettingsRepository
 import com.alirezabeigy.paqetng.data.TcpdumpBuffer
 import com.alirezabeigy.paqetng.paqet.PaqetRunner
 import com.alirezabeigy.paqetng.paqet.TcpdumpRunner
+import com.alirezabeigy.paqetng.util.ShizukuHelper
 import com.alirezabeigy.paqetng.vpn.PaqetNGVpnService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
+
+/**
+ * Application singleton. Holds [logBuffer] and [paqetRunner] so the VPN service can
+ * notify the app when it stops (e.g. user disconnects from notification/system VPN settings),
+ * and the app can sync state by stopping paqet. When paqet crashes, restarts it if auto-reconnect is on.
+ */
+class PaqetNGApplication : Application() {
 
 /**
  * Application singleton. Holds [logBuffer] and [paqetRunner] so the VPN service can
@@ -44,6 +53,15 @@ class PaqetNGApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Initialize Shizuku
+        Shizuku.addBinderReceivedListenerSticky {
+            // Shizuku binder received
+        }
+        Shizuku.addBinderDeadListener {
+            // Shizuku binder dead
+        }
+
         val filter = IntentFilter(PaqetNGVpnService.ACTION_VPN_STOPPED)
         ContextCompat.registerReceiver(
             this,
